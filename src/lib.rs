@@ -39,6 +39,32 @@ pub struct Graph {
 #[derive(Debug, Clone)]
 pub struct Path(Vec<NodeID>);
 
+impl PartialEq for Path {
+    fn eq(&self, other: &Self) -> bool {
+        let len = self.0.len();
+        if len != other.0.len() {
+            return false;
+        }
+
+        for (i, _) in self.0.iter().enumerate() {
+            if self.0[i] != other.0[i] {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl IntoIterator for Path {
+    type Item = NodeID;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl Graph {
     pub fn new() -> Self {
         Self {
@@ -102,66 +128,55 @@ impl Graph {
     }
 
     pub fn find_shortest_path(self: &Self, from_id: NodeID, to_id: NodeID) -> Option<(Path, f32)> {
-        let mut paths: Vec<Path> = vec![];
-        self.create_or_extend_paths(&mut paths, from_id, from_id, from_id, to_id, None);
-        println!();
-        println!();
-        paths.iter().for_each(|p| println!("{p:?}"));
+        let mut unique_paths: Vec<Path> = vec![];
 
-        None
+        {
+            let mut paths: Vec<Path> = vec![];
+            self.create_or_extend_paths(&mut paths, from_id, from_id, from_id, to_id, None);
 
-        // // filter out paths that do not end on the desired to_id node
-        // let eligible_paths: Vec<&Path> = paths
-        //     .iter()
-        //     .filter(|p| p.0.first().unwrap() == &from_id && p.0.last().unwrap() == &to_id)
-        //     .collect();
+            // remove duplicate paths
+            let paths_len = paths.len();
+            for (i, p) in paths.iter().enumerate() {
+                if !&paths[i + 1..paths_len].contains(p) {
+                    unique_paths.push(p.clone());
+                }
+            }
+        }
 
-        // // find the shortest path based on distance
-        // let mut distances: Vec<f32> = vec![];
-        // eligible_paths.iter().enumerate().for_each(|(i, path)| {
-        //     let mut distance: f32 = 0.0;
-        //     path.0
-        //         .iter()
-        //         .zip(path.0.iter().skip(1))
-        //         .for_each(|(node_a_id, node_b_id)| {
-        //             distance += self
-        //                 .get_edge_between_nodes(*node_a_id, *node_b_id)
-        //                 .unwrap()
-        //                 .distance;
-        //         });
+        // filter out paths that do not end on the desired to_id node
+        let eligible_paths: Vec<Path> = unique_paths
+            .into_iter()
+            .filter(|p| p.0.first().unwrap() == &from_id && p.0.last().unwrap() == &to_id)
+            .collect();
 
-        //     distances.push(distance);
-        // });
+        if eligible_paths.is_empty() {
+            return None;
+        }
 
-        // let mut shortest_path_index: usize = 0;
-        // distances.iter().enumerate().for_each(|(i, dist)| {
-        //     if i != 0 && *dist < distances[i - 1] {
-        //         shortest_path_index = i;
-        //     }
-        // });
+        // find the shortest path based on distance
+        let mut distances: Vec<f32> = vec![];
+        eligible_paths.iter().enumerate().for_each(|(i, path)| {
+            let mut distance: f32 = 0.0;
+            path.0
+                .iter()
+                .zip(path.0.iter().skip(1))
+                .for_each(|(node_a_id, node_b_id)| {
+                    distance += self.get_edge_between_nodes(*node_a_id, *node_b_id).unwrap().distance;
+                });
 
-        // let shortest_path = eligible_paths[shortest_path_index].clone();
-        // Some((shortest_path, distances[shortest_path_index]))
+            distances.push(distance);
+        });
+
+        let mut shortest_path_index: usize = 0;
+        distances.iter().enumerate().for_each(|(i, dist)| {
+            if *dist < distances[shortest_path_index] {
+                shortest_path_index = i;
+            }
+        });
+
+        Some((eligible_paths[shortest_path_index].clone(), distances[shortest_path_index]))
     }
 
-    // Create a new path for every node that has more than one forward edge
-    // Each path should then be extended until:
-    // - no more forward nodes are available
-    // - the from_id node is reached again, meaning we came full circle
-    ///////////////////////////////////////////////
-    // Suppose there's a graph with this structure
-    //
-    //                 5 - 7
-    //                /
-    //          1 -- 3
-    //        /       \
-    //  10 - 0         6
-    //        \       /
-    //          2 -- 4
-    //                \
-    //                 8 - 9
-    //
-    ///////////////////////////////////////////////
     fn create_or_extend_paths(
         self: &Self,
         paths: &mut Vec<Path>,
@@ -172,10 +187,27 @@ impl Graph {
         path: Option<Path>,
     ) {
         let cur_node = self.get_node_by_id(cur_id).unwrap();
-        print!("{cur_id} ");
+
         for edge_id in &cur_node.edges {
             let edge = self.get_edge_by_id(*edge_id).unwrap();
             let next_node_id = edge.get_other_node_id(cur_id);
+
+            if path.is_some() {
+                let mut new_path = path.clone().unwrap();
+                if new_path.0.contains(&next_node_id) {
+                    paths.push(new_path);
+                    continue;
+                }
+            }
+
+            if path.is_some() {
+                if &prev_id == path.clone().unwrap().0.last().unwrap() {
+                    let mut new_path = path.clone().unwrap();
+                    new_path.0.push(cur_id);
+                    new_path.0.push(next_node_id);
+                    paths.push(new_path);
+                }
+            }
 
             if cur_id == dest_id {
                 if let Some(ref cur_path) = path {
