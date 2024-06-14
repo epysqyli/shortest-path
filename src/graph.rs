@@ -1,68 +1,18 @@
-#![allow(warnings)]
-use std::collections::{hash_map, HashMap};
+mod edge;
+pub mod node;
+mod path;
+
+use crate::graph::edge::Edge;
+use crate::graph::node::Node;
+use crate::graph::path::Path;
 
 type NodeID = usize;
 type EdgeID = usize;
 
 #[derive(Debug)]
-pub struct Node {
-    x: f32,
-    y: f32,
-    id: NodeID,
-    edges: Vec<EdgeID>,
-}
-
-#[derive(Debug)]
-pub struct Edge {
-    id: EdgeID,
-    a: NodeID,
-    b: NodeID,
-    distance: f32,
-}
-
-impl Edge {
-    pub fn get_other_node_id(self: &Self, node_id: NodeID) -> NodeID {
-        if node_id == self.a {
-            self.b
-        } else {
-            self.a
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct Graph {
     nodes: Vec<Node>,
     edges: Vec<Edge>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Path(Vec<NodeID>);
-
-impl PartialEq for Path {
-    fn eq(&self, other: &Self) -> bool {
-        let len = self.0.len();
-        if len != other.0.len() {
-            return false;
-        }
-
-        for (i, _) in self.0.iter().enumerate() {
-            if self.0[i] != other.0[i] {
-                return false;
-            }
-        }
-
-        true
-    }
-}
-
-impl IntoIterator for Path {
-    type Item = NodeID;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
 }
 
 impl Graph {
@@ -155,7 +105,7 @@ impl Graph {
 
         // find the shortest path based on distance
         let mut distances: Vec<f32> = vec![];
-        eligible_paths.iter().enumerate().for_each(|(i, path)| {
+        eligible_paths.iter().for_each(|path| {
             let mut distance: f32 = 0.0;
             path.0
                 .iter()
@@ -174,7 +124,10 @@ impl Graph {
             }
         });
 
-        Some((eligible_paths[shortest_path_index].clone(), distances[shortest_path_index]))
+        Some((
+            eligible_paths[shortest_path_index].clone(),
+            distances[shortest_path_index],
+        ))
     }
 
     fn create_or_extend_paths(
@@ -193,7 +146,7 @@ impl Graph {
             let next_node_id = edge.get_other_node_id(cur_id);
 
             if path.is_some() {
-                let mut new_path = path.clone().unwrap();
+                let new_path = path.clone().unwrap();
                 if new_path.0.contains(&next_node_id) {
                     paths.push(new_path);
                     continue;
@@ -220,7 +173,7 @@ impl Graph {
             }
 
             if next_node_id == prev_id {
-                if (cur_node.edges.len() == 1) {
+                if cur_node.edges.len() == 1 {
                     if let Some(ref cur_path) = path {
                         let mut extended_path = cur_path.clone();
                         extended_path.0.push(cur_id);
@@ -248,7 +201,7 @@ impl Graph {
                     self.create_or_extend_paths(paths, cur_node.id, next_node_id, origin_id, dest_id, Some(ext_path));
                 }
                 None => {
-                    let mut new_path = Path(vec![cur_id]);
+                    let new_path = Path(vec![cur_id]);
                     self.create_or_extend_paths(paths, cur_node.id, next_node_id, origin_id, dest_id, Some(new_path));
                 }
             }
@@ -272,12 +225,12 @@ impl Graph {
 
     fn get_edge_between_nodes(self: &Self, from_id: NodeID, to_id: NodeID) -> Option<&Edge> {
         let a_to_b = self.edges.iter().find(|e| e.a == from_id && e.b == to_id);
-        if (a_to_b.is_some()) {
+        if a_to_b.is_some() {
             return a_to_b;
         }
 
         let b_to_a = self.edges.iter().find(|e| e.b == from_id && e.a == to_id);
-        if (b_to_a.is_some()) {
+        if b_to_a.is_some() {
             return b_to_a;
         }
 

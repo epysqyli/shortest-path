@@ -1,5 +1,5 @@
-use shortest_path::Graph;
-
+mod graph;
+use graph::Graph;
 ///////////////////////////////////////////////
 //
 //                 5 - 7
@@ -17,7 +17,7 @@ use shortest_path::Graph;
 //        13 -- 14
 //          \  /
 //           16
-// 
+//
 ///////////////////////////////////////////////
 fn main() {
     let mut graph = Graph::new();
